@@ -1,6 +1,6 @@
 # school-api
 
-A RESTful API for managing school students, built with Go. Follows clean layered architecture using Gin, PostgreSQL, GORM, and zerolog.
+A RESTful API for managing school students, built with Go. Follows clean layered architecture using Gin, PostgreSQL, GORM, and zerolog. Includes an MCP server so AI assistants can interact with the API directly.
 
 ## Stack
 
@@ -8,21 +8,25 @@ A RESTful API for managing school students, built with Go. Follows clean layered
 - **Web Framework:** [Gin](https://github.com/gin-gonic/gin)
 - **Database:** PostgreSQL via [GORM](https://gorm.io) + [pgx](https://github.com/jackc/pgx)
 - **Logging:** [zerolog](https://github.com/rs/zerolog)
+- **MCP:** [mcp-go](https://github.com/mark3labs/mcp-go)
 - **Containerization:** Docker + Docker Compose
 
 ## Project Structure
 
 ```
 school-api/
-├── main.go                     # Entry point, graceful shutdown
+├── main.go                          # Entry point, graceful shutdown
+├── cmd/
+│   └── mcp/main.go                  # MCP server entry point
 ├── internal/
-│   ├── config/config.go        # Environment-based configuration
-│   ├── db/postgres.go          # GORM connection, AutoMigrate
-│   ├── handlers/students.go    # HTTP request handlers
-│   ├── models/student.go       # Data models with GORM tags
-│   └── server/server.go        # Router, middleware, server lifecycle
+│   ├── config/config.go             # Environment-based configuration
+│   ├── db/postgres.go               # GORM connection, AutoMigrate
+│   ├── handlers/students.go         # HTTP request handlers
+│   ├── mcptools/client.go           # HTTP client used by MCP server
+│   ├── models/student.go            # Data models with GORM tags
+│   └── server/server.go             # Router, middleware, server lifecycle
 └── pkg/
-    └── logger/logger.go        # Structured logger setup
+    └── logger/logger.go             # Structured logger setup
 ```
 
 ## Endpoints
@@ -116,6 +120,91 @@ curl http://localhost:8080/api/v1/students/<id>
 ```bash
 curl -X DELETE http://localhost:8080/api/v1/students/<id>
 ```
+
+## MCP Server
+
+The MCP server exposes the school-api as tools for AI assistants (Claude Code, Claude Desktop, GitHub Copilot, Cursor, etc.).
+
+### Available Tools
+
+| Tool             | Description                  |
+|------------------|------------------------------|
+| `list_students`  | List all students            |
+| `get_student`    | Get a student by ID          |
+| `add_student`    | Add a new student            |
+| `delete_student` | Delete a student by ID       |
+
+### Build the MCP binary
+
+```bash
+go build -o bin/school-api-mcp ./cmd/mcp
+```
+
+### Claude Code (VS Code extension)
+
+Register the server via the Claude Code CLI:
+
+```bash
+claude mcp add school-api \
+  --transport stdio \
+  /path/to/school-api/bin/school-api-mcp \
+  --env SCHOOL_API_URL=http://localhost:8080
+```
+
+Then reload the VS Code window (`Cmd+Shift+P` → `Developer: Reload Window`) and type `/mcp` in the chat to confirm it's connected.
+
+### Claude Desktop
+
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json`:
+
+```json
+{
+  "mcpServers": {
+    "school-api": {
+      "type": "stdio",
+      "command": "/path/to/school-api/bin/school-api-mcp",
+      "env": {
+        "SCHOOL_API_URL": "http://localhost:8080"
+      }
+    }
+  }
+}
+```
+
+Restart Claude Desktop.
+
+### GitHub Copilot (VS Code)
+
+Add to `.vscode/mcp.json` in your project:
+
+```json
+{
+  "servers": {
+    "school-api": {
+      "type": "stdio",
+      "command": "/path/to/school-api/bin/school-api-mcp",
+      "env": {
+        "SCHOOL_API_URL": "http://localhost:8080"
+      }
+    }
+  }
+}
+```
+
+Switch to **Agent mode** in Copilot Chat to use the tools.
+
+### Usage examples
+
+Once connected, just talk naturally to your AI assistant:
+
+```
+Add a student named Alice, email alice@school.com, age 15, grade 10th
+Show me all students
+Get student with ID 1
+Delete student with ID 2
+```
+
+The `SCHOOL_API_URL` environment variable controls which instance of the API the MCP server talks to. Defaults to `http://localhost:8080`.
 
 ## Development
 
