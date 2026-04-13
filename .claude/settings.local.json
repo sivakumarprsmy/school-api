@@ -10,7 +10,13 @@
       "Read(//Users/periasamy/go/bin/**)",
       "Bash(/usr/local/go/bin/go mod:*)",
       "Bash(/usr/local/go/bin/go build:*)",
-      "Bash(echo \"EXIT:$?\")"
+      "Bash(echo \"EXIT:$?\")",
+      "WebFetch(domain:purpleblockinc.atlassian.net)",
+      "Bash(/usr/local/go/bin/go test:*)",
+      "mcp__atlassian__createJiraIssue",
+      "Bash(timeout 3 /Users/periasamy/Learning/school-api/bin/school-api-mcp)",
+      "Bash(gtimeout 3 /Users/periasamy/Learning/school-api/bin/school-api-mcp)",
+      "mcp__school-api__add_student"
     ]
   }
 }
