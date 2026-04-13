@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__school-api__list_students",
+      "mcp__school-api__enroll_student"
+    ]
+  }
+}

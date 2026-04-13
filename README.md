@@ -9,6 +9,7 @@ A RESTful API for managing school students, built with Go. Follows clean layered
 - **Database:** PostgreSQL via [GORM](https://gorm.io) + [pgx](https://github.com/jackc/pgx)
 - **Logging:** [zerolog](https://github.com/rs/zerolog)
 - **MCP:** [mcp-go](https://github.com/mark3labs/mcp-go)
+- **AI Agent:** [Anthropic Go SDK](https://github.com/anthropics/anthropic-sdk-go)
 - **Containerization:** Docker + Docker Compose
 
 ## Project Structure
@@ -17,12 +18,14 @@ A RESTful API for managing school students, built with Go. Follows clean layered
 school-api/
 ├── main.go                          # Entry point, graceful shutdown
 ├── cmd/
-│   └── mcp/main.go                  # MCP server entry point
+│   ├── mcp/main.go                  # MCP server entry point
+│   └── agent/main.go                # Enrollment agent (Anthropic SDK)
 ├── internal/
 │   ├── config/config.go             # Environment-based configuration
 │   ├── db/postgres.go               # GORM connection, AutoMigrate
 │   ├── handlers/students.go         # HTTP request handlers
-│   ├── mcptools/client.go           # HTTP client used by MCP server
+│   ├── mcptools/client.go           # HTTP client (shared by MCP + agent)
+│   ├── mcptools/validator.go        # Email domain validator
 │   ├── models/student.go            # Data models with GORM tags
 │   └── server/server.go             # Router, middleware, server lifecycle
 └── pkg/
@@ -127,17 +130,18 @@ The MCP server exposes the school-api as tools for AI assistants (Claude Code, C
 
 ### Available Tools
 
-| Tool             | Description                  |
-|------------------|------------------------------|
-| `list_students`  | List all students            |
-| `get_student`    | Get a student by ID          |
-| `add_student`    | Add a new student            |
-| `delete_student` | Delete a student by ID       |
+| Tool               | Description                    |
+|--------------------|--------------------------------|
+| `list_students`    | List all students              |
+| `get_student`      | Get a student by ID            |
+| `add_student`      | Add a new student              |
+| `delete_student`   | Delete a student by ID         |
 
 ### Build the MCP binary
 
 ```bash
-go build -o bin/school-api-mcp ./cmd/mcp
+make build-mcp
+# or: go build -o bin/school-mcp ./cmd/mcp
 ```
 
 ### Claude Code (VS Code extension)
@@ -206,10 +210,64 @@ Delete student with ID 2
 
 The `SCHOOL_API_URL` environment variable controls which instance of the API the MCP server talks to. Defaults to `http://localhost:8080`.
 
+## Enrollment Agent
+
+The enrollment agent is a standalone CLI program powered by the Anthropic API. It accepts a natural-language enrollment request via stdin, reasons about it, and enrolls the student — handling edge cases automatically.
+
+### What it does
+
+| Situation                     | Agent behaviour                                          |
+|-------------------------------|----------------------------------------------------------|
+| All fields present, valid email, no duplicate | Enrolls and confirms                   |
+| Missing name / age / grade    | Tells you what's missing                                 |
+| Invalid email format          | Reports the error, asks for a corrected email            |
+| Email domain not in whitelist | Names the accepted domains, asks for a corrected email   |
+| Student already enrolled      | Informs you and does **not** create a duplicate          |
+
+### Build
+
+```bash
+make build-agent
+# or: go build -o bin/enrollment-agent ./cmd/agent
+```
+
+### Run
+
+```bash
+# Piped input (typical usage)
+echo "Enroll Alice Johnson, alice@school.com, age 15, grade 10th" | \
+  ANTHROPIC_API_KEY=<key> ALLOWED_EMAIL_DOMAINS=school.com ./bin/enrollment-agent
+
+# Interactive (no pipe — agent prompts you)
+ANTHROPIC_API_KEY=<key> ./bin/enrollment-agent
+```
+
+### Environment variables
+
+| Variable                | Required | Description                                         |
+|-------------------------|----------|-----------------------------------------------------|
+| `ANTHROPIC_API_KEY`     | Yes      | Your Anthropic API key                              |
+| `SCHOOL_API_URL`        | No       | School API base URL (default: `http://localhost:8080`) |
+| `ALLOWED_EMAIL_DOMAINS` | No       | Comma-separated allowed domains (e.g. `school.com,students.school.com`). Leave empty to allow any domain. |
+
+### Example output
+
+```
+✅ Alice Johnson has been successfully enrolled!
+
+  ID:    42
+  Name:  Alice Johnson
+  Email: alice@school.com
+  Age:   15
+  Grade: 10th
+```
+
 ## Development
 
 ```bash
-make build        # Compile binary to bin/
+make build        # Compile REST API binary to bin/
+make build-mcp    # Compile MCP server binary to bin/
+make build-agent  # Compile enrollment agent binary to bin/
 make test         # Run tests with coverage
 make lint         # Run golangci-lint
 make tidy         # Run go mod tidy
